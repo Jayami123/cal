@@ -257,6 +257,45 @@ const nextConfig = (phase: string): NextConfig => {
       unoptimized: true,
     },
     turbopack: {},
+    webpack: (config, { webpack: wp, isServer }) => {
+      /**
+       * Windows `next dev --webpack` throws UnhandledSchemeError on `node:*` specifiers
+       * that leak into the client graph (i18n config, app-store metadata, Booker).
+       */
+      config.plugins.push(
+        new wp.NormalModuleReplacementPlugin(/^node:/, (resource: { request: string }) => {
+          resource.request = resource.request.replace(/^node:/, "");
+        }),
+      );
+      config.plugins.push({
+        apply(compiler: { hooks: { compilation: { tap: Function } } }) {
+          compiler.hooks.compilation.tap(
+            "P1NodeProtocolPlugin",
+            (_compilation: unknown, { normalModuleFactory }: { normalModuleFactory: { hooks: { resolveForScheme: { for: Function } } } }) => {
+              normalModuleFactory.hooks.resolveForScheme
+                .for("node")
+                .tap("P1NodeProtocolPlugin", (resourceData: { resource: string; path?: string }) => {
+                  const bare = resourceData.resource.replace(/^node:/, "");
+                  resourceData.resource = bare;
+                  resourceData.path = bare;
+                  return true;
+                });
+            },
+          );
+        },
+      });
+      if (!isServer) {
+        config.resolve.fallback = {
+          ...config.resolve.fallback,
+          fs: false,
+          path: false,
+          os: false,
+          crypto: false,
+          process: false,
+        };
+      }
+      return config;
+    },
     async rewrites() {
       const { orgSlug } = nextJsOrgRewriteConfig;
       const beforeFiles = [

@@ -1379,7 +1379,11 @@ async function runSeed() {
 
   await mainAppStore();
   await main();
-  await mainHugeEventTypesSeed();
+  if (process.env.CAL_SEED_SKIP_HUGE === "1") {
+    console.log("Skipping huge event-type seed (CAL_SEED_SKIP_HUGE=1).");
+  } else {
+    await mainHugeEventTypesSeed();
+  }
 }
 
 runSeed()
